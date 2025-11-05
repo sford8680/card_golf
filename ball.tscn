@@ -1,0 +1,56 @@
+[gd_scene load_steps=4 format=3 uid="uid://bfop7mv5sexkb"]
+
+[ext_resource type="Script" path="res://scripts/ball.gd" id="1_ball_script"]
+
+[sub_resource type="ParticleProcessMaterial" id="ParticleProcessMaterial_dust"]
+particle_flag_disable_z = true
+direction = Vector3(0, -1, 0)
+spread = 180.0
+initial_velocity_min = 50.0
+initial_velocity_max = 100.0
+gravity = Vector3(0, 200, 0)
+color = Color(0.7, 0.6, 0.5, 1)
+
+[sub_resource type="ParticleProcessMaterial" id="ParticleProcessMaterial_grass"]
+particle_flag_disable_z = true
+direction = Vector3(0, -1, 0)
+spread = 180.0
+initial_velocity_min = 30.0
+initial_velocity_max = 70.0
+gravity = Vector3(0, 150, 0)
+color = Color(0.3, 0.7, 0.3, 1)
+
+[node name="Ball" type="Node2D"]
+script = ExtResource("1_ball_script")
+
+[node name="BallSprite" type="ColorRect" parent="."]
+offset_left = -5.0
+offset_top = -5.0
+offset_right = 5.0
+offset_bottom = 5.0
+color = Color(1, 1, 1, 1)
+
+[node name="BallShadow" type="ColorRect" parent="."]
+offset_left = -6.0
+offset_top = -3.0
+offset_right = 6.0
+offset_bottom = 3.0
+color = Color(0, 0, 0, 0.3)
+
+[node name="DustParticles" type="CPUParticles2D" parent="."]
+position = Vector2(0, 0)
+emitting = false
+amount = 20
+lifetime = 0.5
+one_shot = true
+explosiveness = 0.8
+process_material = SubResource("ParticleProcessMaterial_dust")
+
+[node name="GrassParticles" type="CPUParticles2D" parent="."]
+position = Vector2(0, 0)
+emitting = false
+amount = 15
+lifetime = 0.4
+one_shot = true
+explosiveness = 0.7
+process_material = SubResource("ParticleProcessMaterial_grass")
