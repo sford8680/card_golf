@@ -20,6 +20,7 @@ var start_square: Square
 var hole_square: Square
 var current_ball_square: Square
 var selected_club: Club = null
+var selected_club_button: Button = null
 
 var ball_instance: Node2D # Reference to the instantiated Ball scene
 var square_buttons: Dictionary = {}
@@ -198,38 +199,72 @@ func _highlight_squares(club: Club):
     _clear_highlights() # Start with a clean slate
 
     var modified_max_distance = club.max_distance
+    var is_wood = "Wood" in club.name or "Driver" in club.name
+
     match current_ball_square.terrain_type:
         Square.TerrainType.ROUGH:
             modified_max_distance -= 1
+            if is_wood:
+                modified_max_distance -= 1
         Square.TerrainType.SAND:
             modified_max_distance -= 1
+            if is_wood:
+                modified_max_distance -= 2
 
     for y_iter in range(grid_height):
         for x_iter in range(grid_width):
             var square = _get_square_at_grid_coords(x_iter, y_iter)
             if square:
                 var distance = _get_distance(current_ball_square, square)
-                if distance > 0 and distance <= modified_max_distance:
+                if distance == modified_max_distance:
                     var square_button = square_buttons[Vector2(square.x, square.y)]
                     if square_button:
                         var stylebox_normal = square_button.get_theme_stylebox("normal") as StyleBoxFlat
                         stylebox_normal.bg_color = COLOR_PLAYABLE # Playable square
+                elif distance == modified_max_distance + 1:
+                    var square_button = square_buttons[Vector2(square.x, square.y)]
+                    if square_button:
+                        var stylebox_normal = square_button.get_theme_stylebox("normal") as StyleBoxFlat
+                        stylebox_normal.bg_color = COLOR_PLAYABLE.lerp(COLOR_VARIANCE, 0.5) # Power shot square
+
+func _get_power_shot_accuracy_modifier():
+    var accuracy_modifier = 0
+    var is_wood = "Wood" in selected_club.name or "Driver" in selected_club.name
+    match current_ball_square.terrain_type:
+        Square.TerrainType.ROUGH:
+            accuracy_modifier += 1
+            if is_wood:
+                accuracy_modifier += 1
+        Square.TerrainType.SAND:
+            accuracy_modifier += 2
+            if is_wood:
+                accuracy_modifier += 2
+    
+    var possible_deviations = selected_club.accuracy.get(selected_club.max_distance, [0])
+    if possible_deviations == [0]:
+        accuracy_modifier += 1
+    else:
+        var max_dev = 0
+        if possible_deviations.size() > 0:
+            max_dev = possible_deviations.max()
+        accuracy_modifier += abs(max_dev)
+    return accuracy_modifier
 
 func _on_club_button_pressed(club: Club, button: Button):
     if selected_club == club:
         # Deselect club
         selected_club = null
+        selected_club_button = null
         button.position.y += 20 # Slide down
         _clear_highlights()
     else:
         # Deselect previously selected club if any
-        if selected_club:
-            var prev_button = club_hand_container.find_child("ClubButton" + str(player_clubs.find(selected_club)))
-            if prev_button:
-                prev_button.position.y += 20 # Slide down
+        if selected_club_button:
+            selected_club_button.position.y += 20 # Slide down
         
         # Select new club
         selected_club = club
+        selected_club_button = button
         button.position.y -= 20 # Slide up
         _highlight_squares(selected_club)
 
@@ -244,40 +279,32 @@ func _get_distance(square1: Square, square2: Square) -> int:
 
 func _on_square_mouse_entered(x: int, y: int):
     if selected_club:
+        _clear_highlights()
+        _highlight_squares(selected_club)
+
         var hovered_square = _get_square_at_grid_coords(x, y)
         if not hovered_square: return
 
         var modified_max_distance = selected_club.max_distance
-        var accuracy_modifier = 0
+        var is_wood = "Wood" in selected_club.name or "Driver" in selected_club.name
 
         match current_ball_square.terrain_type:
             Square.TerrainType.ROUGH:
                 modified_max_distance -= 1
-                accuracy_modifier += 1
+                if is_wood:
+                    modified_max_distance -= 1
             Square.TerrainType.SAND:
                 modified_max_distance -= 1
-                accuracy_modifier += 2
+                if is_wood:
+                    modified_max_distance -= 2
 
         var distance_to_hovered = _get_distance(current_ball_square, hovered_square)
+        var is_power_shot = distance_to_hovered == modified_max_distance + 1
 
-        if distance_to_hovered > 0 and distance_to_hovered <= modified_max_distance:
-            # Highlight hovered square as playable
-            var hovered_button = square_buttons[Vector2(hovered_square.x, hovered_square.y)]
-            if hovered_button:
-                var stylebox_normal = hovered_button.get_theme_stylebox("normal") as StyleBoxFlat
-                stylebox_normal.bg_color = COLOR_PLAYABLE
-
-            # Highlight variance squares
-            var possible_deviations = selected_club.accuracy.get(distance_to_hovered, [0])
-            var min_club_dev = 0
-            var max_club_dev = 0
-            if possible_deviations.size() > 0:
-                min_club_dev = possible_deviations.min()
-                max_club_dev = possible_deviations.max()
-
-            # Calculate min and max possible deviations including terrain effect
-            var min_dev = min_club_dev - accuracy_modifier
-            var max_dev = max_club_dev + accuracy_modifier
+        if is_power_shot:
+            var accuracy_modifier = _get_power_shot_accuracy_modifier()
+            var min_dev = -accuracy_modifier
+            var max_dev = accuracy_modifier
 
             for dev_x in range(min_dev, max_dev + 1):
                 var variance_x = hovered_square.x + dev_x
@@ -306,24 +333,27 @@ func _on_square_pressed(x: int, y: int):
         if not pressed_square: return
 
         var modified_max_distance = selected_club.max_distance
-        var accuracy_modifier = 0
+        var is_wood = "Wood" in selected_club.name or "Driver" in selected_club.name
 
         match current_ball_square.terrain_type:
             Square.TerrainType.ROUGH:
                 modified_max_distance -= 1
-                accuracy_modifier += 1
+                if is_wood:
+                    modified_max_distance -= 1
             Square.TerrainType.SAND:
                 modified_max_distance -= 1
-                accuracy_modifier += 2
+                if is_wood:
+                    modified_max_distance -= 2
 
         var distance_to_pressed = _get_distance(current_ball_square, pressed_square)
+        var is_power_shot = distance_to_pressed == modified_max_distance + 1
+        var is_normal_shot = distance_to_pressed == modified_max_distance
 
-        if distance_to_pressed > 0 and distance_to_pressed <= modified_max_distance:
-            # Calculate actual landing spot with deviation
-            var possible_deviations = selected_club.accuracy.get(distance_to_pressed, [0])
-            var base_deviation = possible_deviations[randi() % possible_deviations.size()]
-
-            var final_deviation = base_deviation + (randi() % (2 * accuracy_modifier + 1)) - accuracy_modifier
+        if is_normal_shot or is_power_shot:
+            var final_deviation = 0
+            if is_power_shot:
+                var accuracy_modifier = _get_power_shot_accuracy_modifier()
+                final_deviation = (randi() % (2 * accuracy_modifier + 1)) - accuracy_modifier
 
             var final_x = clamp(pressed_square.x + final_deviation, 0, grid_width - 1)
             var final_y = pressed_square.y # For now, deviation is only horizontal
