@@ -3,13 +3,15 @@ extends Control
 const Square = preload("res://scripts/square.gd")
 const BallScene = preload("res://ball.tscn")
 
-const COLOR_FAIRWAY = Color(0.4, 0.8, 0.4)
-const COLOR_ROUGH = Color(0.2, 0.6, 0.2)
+const COLOR_FAIRWAY = Color(0.5, 0.9, 0.5)
+const COLOR_ROUGH = Color(0.1, 0.4, 0.1)
 const COLOR_SAND = Color(0.9, 0.9, 0.6)
-const COLOR_GREEN = Color(0.3, 0.7, 0.3)
+const COLOR_GREEN = Color(0.6, 0.9, 0.4)
 const COLOR_HOLE = Color(0.1, 0.1, 0.1)
 const COLOR_PLAYABLE = Color(0.6, 0.8, 1.0)
 const COLOR_VARIANCE = Color(1.0, 0.7, 0.4)
+const COLOR_TREE = Color(0.3, 0.4, 0.1)
+const COLOR_TEEBOX = Color(0.8, 0.2, 0.2)
 
 var player_clubs: Array
 var hole_grid: Dictionary # Stores Square objects, keyed by Vector2(x, y)
@@ -39,9 +41,8 @@ func _ready():
     ball_instance = BallScene.instantiate()
     hex_grid_container.add_child(ball_instance)
     ball_instance.visible = true # Make the ball visible initially
-    print("Ball scene instantiated and added. ball_instance: ", ball_instance)
-
     _update_ball_position_display()
+    _create_legend()
 
 func set_player_clubs(clubs: Array):
     player_clubs = clubs
@@ -69,56 +70,57 @@ func _generate_hole():
             square_button.connect("mouse_exited", Callable(self, "_on_square_mouse_exited").bind(x, y))
             hex_grid_container.add_child(square_button) # Still using hex_grid_container name for now
 
-    # Define Tee Box (last 2 rows)
+    # Define Tee Box
     var tee_box_center_x = randi() % (grid_width - 4) + 2 # Random x for tee box
-    for y in range(grid_height - 2, grid_height): # Last two rows
-        for x_val in range(tee_box_center_x - 2, tee_box_center_x + 3):
-            if hole_grid.has(Vector2(x_val, y)):
-                hole_grid[Vector2(x_val, y)].terrain_type = Square.TerrainType.FAIRWAY # Tee box is part of fairway
+    hole_grid[Vector2(tee_box_center_x, grid_height - 1)].terrain_type = Square.TerrainType.TEEBOX
 
-    # Random Fairway Path Generation (from bottom to top)
-    var current_fairway_x = tee_box_center_x # Start fairway from tee box center
-    for y in range(grid_height - 3, 1, -1): # Iterate from bottom-ish to top-ish
+    # Random Green position
+    var green_center_x = randi() % (grid_width - 8) + 4
+    var green_center_y = randi() % (grid_height / 2)
+    var green_width = randi() % 3 + 3
+    var green_height = randi() % 2 + 2
+
+    for y in range(green_center_y, green_center_y + green_height):
+        for x in range(green_center_x, green_center_x + green_width):
+            if hole_grid.has(Vector2(x, y)):
+                hole_grid[Vector2(x, y)].terrain_type = Square.TerrainType.GREEN
+
+    # Random Fairway Path Generation (from tee box to green)
+    var current_fairway_x = tee_box_center_x
+    var current_fairway_y = grid_height - 3
+    while current_fairway_y > green_center_y + green_height:
         # Randomly adjust fairway x, ensuring it stays within bounds
         var x_offset = randi() % 3 - 1 # -1, 0, or 1
         current_fairway_x = clamp(current_fairway_x + x_offset, 1, grid_width - 2)
 
-        # Mark fairway squares (3 wide)
-        for x_val in range(current_fairway_x - 1, current_fairway_x + 2):
-            if hole_grid.has(Vector2(x_val, y)):
-                hole_grid[Vector2(x_val, y)].terrain_type = Square.TerrainType.FAIRWAY
+        # Mark fairway squares (2 wide)
+        for x_val in range(current_fairway_x - 1, current_fairway_x + 1):
+            if hole_grid.has(Vector2(x_val, current_fairway_y)):
+                hole_grid[Vector2(x_val, current_fairway_y)].terrain_type = Square.TerrainType.FAIRWAY
+        current_fairway_y -= 1
 
-    # Add sand around the fairway
+    # Bunkers near green
+    for y in range(green_center_y - 2, green_center_y + green_height + 2):
+        for x in range(green_center_x - 2, green_center_x + green_width + 2):
+            if hole_grid.has(Vector2(x, y)):
+                var square = hole_grid[Vector2(x, y)]
+                if square.terrain_type == Square.TerrainType.ROUGH and randf() < 0.4:
+                    square.terrain_type = Square.TerrainType.SAND
+
+    # Trees
     for y in range(grid_height):
         for x in range(grid_width):
             var square = hole_grid[Vector2(x, y)]
-            if square.terrain_type == Square.TerrainType.ROUGH:
-                # Check if adjacent to fairway
-                var is_adjacent_to_fairway = false
-                for dy in range(-1, 2):
-                    for dx in range(-1, 2):
-                        if dx == 0 and dy == 0: continue
-                        var neighbor_pos = Vector2(x + dx, y + dy)
-                        if hole_grid.has(neighbor_pos):
-                            var neighbor_square = hole_grid[neighbor_pos]
-                            if neighbor_square.terrain_type == Square.TerrainType.FAIRWAY:
-                                is_adjacent_to_fairway = true
-                                break
-                    if is_adjacent_to_fairway: break
-                
-                if is_adjacent_to_fairway and randf() < 0.3: # 30% chance to become sand
-                    square.terrain_type = Square.TerrainType.SAND
-
-    # Create green at the top of the screen (first 3 rows)
-    var green_center_x = current_fairway_x # Use the last fairway x as green center
-    for y in range(3): # First three rows
-        for x_val in range(green_center_x - 2, green_center_x + 3):
-            if hole_grid.has(Vector2(x_val, y)):
-                hole_grid[Vector2(x_val, y)].terrain_type = Square.TerrainType.GREEN
+            if square.terrain_type == Square.TerrainType.ROUGH and randf() < 0.1:
+                square.terrain_type = Square.TerrainType.TREE
+            elif square.terrain_type == Square.TerrainType.FAIRWAY and randf() < 0.05:
+                square.terrain_type = Square.TerrainType.TREE
 
     # Set start and hole positions
     start_square = hole_grid[Vector2(tee_box_center_x, grid_height - 1)] # Bottom-most square
-    hole_square = hole_grid[Vector2(green_center_x, 0)] # Top-most square
+    var hole_x = green_center_x + randi() % green_width
+    var hole_y = green_center_y + randi() % green_height
+    hole_square = hole_grid[Vector2(hole_x, hole_y)] # Random position on the green
     current_ball_square = start_square
 
     # Update button colors based on terrain
@@ -136,6 +138,10 @@ func _generate_hole():
                     stylebox_normal.bg_color = COLOR_SAND
                 Square.TerrainType.GREEN:
                     stylebox_normal.bg_color = COLOR_GREEN
+                Square.TerrainType.TREE:
+                    stylebox_normal.bg_color = COLOR_TREE
+                Square.TerrainType.TEEBOX:
+                    stylebox_normal.bg_color = COLOR_TEEBOX
 
     # Mark hole position with a different color
     var hole_button = square_buttons[Vector2(hole_square.x, hole_square.y)]
@@ -215,6 +221,9 @@ func _highlight_squares(club: Club):
         for x_iter in range(grid_width):
             var square = _get_square_at_grid_coords(x_iter, y_iter)
             if square:
+                if is_wood and is_line_of_sight_blocked(current_ball_square, square):
+                    continue
+
                 var distance = _get_distance(current_ball_square, square)
                 if distance == modified_max_distance:
                     var square_button = square_buttons[Vector2(square.x, square.y)]
@@ -226,6 +235,35 @@ func _highlight_squares(club: Club):
                     if square_button:
                         var stylebox_normal = square_button.get_theme_stylebox("normal") as StyleBoxFlat
                         stylebox_normal.bg_color = COLOR_PLAYABLE.lerp(COLOR_VARIANCE, 0.5) # Power shot square
+
+func is_line_of_sight_blocked(start_square: Square, end_square: Square) -> bool:
+    var x0 = start_square.x
+    var y0 = start_square.y
+    var x1 = end_square.x
+    var y1 = end_square.y
+
+    var dx = abs(x1 - x0)
+    var dy = -abs(y1 - y0)
+    var sx = 1 if x0 < x1 else -1
+    var sy = 1 if y0 < y1 else -1
+    var err = dx + dy
+
+    while true:
+        if x0 == x1 and y0 == y1:
+            break
+        
+        var square = _get_square_at_grid_coords(x0, y0)
+        if square and square.terrain_type == Square.TerrainType.TREE:
+            return true
+
+        var e2 = 2 * err
+        if e2 >= dy:
+            err += dy
+            x0 += sx
+        if e2 <= dx:
+            err += dx
+            y0 += sy
+    return false
 
 func _get_power_shot_accuracy_modifier():
     var accuracy_modifier = 0
@@ -285,8 +323,11 @@ func _on_square_mouse_entered(x: int, y: int):
         var hovered_square = _get_square_at_grid_coords(x, y)
         if not hovered_square: return
 
-        var modified_max_distance = selected_club.max_distance
         var is_wood = "Wood" in selected_club.name or "Driver" in selected_club.name
+        if is_wood and is_line_of_sight_blocked(current_ball_square, hovered_square):
+            return
+
+        var modified_max_distance = selected_club.max_distance
 
         match current_ball_square.terrain_type:
             Square.TerrainType.ROUGH:
@@ -306,9 +347,11 @@ func _on_square_mouse_entered(x: int, y: int):
             var min_dev = -accuracy_modifier
             var max_dev = accuracy_modifier
 
-            for dev_x in range(min_dev, max_dev + 1):
-                var variance_x = hovered_square.x + dev_x
-                var variance_y = hovered_square.y # Assuming deviation is only horizontal for now
+            for dev in range(min_dev, max_dev + 1):
+                var direction_vector = Vector2(hovered_square.x - current_ball_square.x, hovered_square.y - current_ball_square.y).normalized()
+                var perpendicular_vector = Vector2(direction_vector.y, -direction_vector.x)
+                var variance_x = round(hovered_square.x + perpendicular_vector.x * dev)
+                var variance_y = round(hovered_square.y + perpendicular_vector.y * dev)
 
                 if variance_x >= 0 and variance_x < grid_width and \
                    variance_y >= 0 and variance_y < grid_height:
@@ -332,8 +375,11 @@ func _on_square_pressed(x: int, y: int):
         var pressed_square = _get_square_at_grid_coords(x, y)
         if not pressed_square: return
 
-        var modified_max_distance = selected_club.max_distance
         var is_wood = "Wood" in selected_club.name or "Driver" in selected_club.name
+        if is_wood and is_line_of_sight_blocked(current_ball_square, pressed_square):
+            return
+
+        var modified_max_distance = selected_club.max_distance
 
         match current_ball_square.terrain_type:
             Square.TerrainType.ROUGH:
@@ -355,8 +401,10 @@ func _on_square_pressed(x: int, y: int):
                 var accuracy_modifier = _get_power_shot_accuracy_modifier()
                 final_deviation = (randi() % (2 * accuracy_modifier + 1)) - accuracy_modifier
 
-            var final_x = clamp(pressed_square.x + final_deviation, 0, grid_width - 1)
-            var final_y = pressed_square.y # For now, deviation is only horizontal
+            var direction_vector = Vector2(pressed_square.x - current_ball_square.x, pressed_square.y - current_ball_square.y).normalized()
+            var perpendicular_vector = Vector2(direction_vector.y, -direction_vector.x)
+            var final_x = round(pressed_square.x + perpendicular_vector.x * final_deviation)
+            var final_y = round(pressed_square.y + perpendicular_vector.y * final_deviation)
 
             var landing_square = _get_square_at_grid_coords(final_x, final_y)
             if landing_square:
@@ -388,20 +436,90 @@ func _on_square_pressed(x: int, y: int):
                 selected_club = null
                 _clear_highlights()
 
+func _get_accuracy_array(accuracy: int) -> Array:
+    var array = []
+    for i in range(-accuracy, accuracy + 1):
+        array.append(i)
+    return array
+
 func _generate_new_club_set():
     player_clubs.clear()
-    player_clubs.append(Club.new("Driver", "⛳", 5, {5: [-2, -1, 0, 1, 2]}))
-    player_clubs.append(Club.new("3-Wood", "⛳", 4, {4: [-1, 0, 1]}))
-    player_clubs.append(Club.new("5-Wood", "⛳", 3, {3: [-1, 0, 1]}))
-    player_clubs.append(Club.new("4-Iron", "⛳", 3, {3: [0]}))
-    player_clubs.append(Club.new("5-Iron", "⛳", 2, {2: [0]}))
-    player_clubs.append(Club.new("6-Iron", "⛳", 2, {2: [0]}))
-    player_clubs.append(Club.new("7-Iron", "⛳", 2, {2: [-1, 0, 1]}))
-    player_clubs.append(Club.new("8-Iron", "⛳", 1, {1: [0]}))
-    player_clubs.append(Club.new("9-Iron", "⛳", 1, {1: [0]}))
-    player_clubs.append(Club.new("Putter", "⛳", 1, {1: [0]}))
+    # Woods
+    player_clubs.append(Club.new("1-Wood", "⛳", 7, {7: _get_accuracy_array(3)}))
+    player_clubs.append(Club.new("3-Wood", "⛳", 5, {5: _get_accuracy_array(3)}))
+    player_clubs.append(Club.new("5-Wood", "⛳", 4, {4: _get_accuracy_array(2)}))
+    # Irons
+    player_clubs.append(Club.new("4-Iron", "⛳", 4, {4: _get_accuracy_array(2)}))
+    player_clubs.append(Club.new("5-Iron", "⛳", 4, {4: _get_accuracy_array(1)}))
+    player_clubs.append(Club.new("6-Iron", "⛳", 3, {3: _get_accuracy_array(1)}))
+    # Wedge
+    player_clubs.append(Club.new("Wedge", "⛳", 2, {2: _get_accuracy_array(1)}))
+    # Putter
+    player_clubs.append(Club.new("Putter", "⛳", 1, {1: _get_accuracy_array(1)}))
 
 func _generate_new_hole():
+    # Clear existing grid buttons from the container
+    for child in hex_grid_container.get_children():
+        if child is Button:
+            child.queue_free()
+    
+    # Club buttons are cleared in _display_clubs()
+
+    # Generate a new hand of clubs (placeholder for actual game logic)
+    _generate_new_club_set()
+    
+    # Regenerate the hole
+    _generate_hole()
+
+    hex_grid_container.move_child(ball_instance, -1)
+    
+    # Re-display clubs
+    _display_clubs()
+
+    # Ensure ball is positioned correctly at the new start square
+    _update_ball_position_display()
+    
+    # Deselect any selected club
+    if selected_club:
+        var prev_button = club_hand_container.find_child("ClubButton" + str(player_clubs.find(selected_club)))
+        if prev_button:
+            prev_button.position.y += 20 # Slide down
+        selected_club = null
+    _clear_highlights() # Clear any lingering highlights
+
+func _create_legend():
+    var legend_container = VBoxContainer.new()
+    legend_container.name = "Legend"
+    legend_container.position = Vector2(1100, 50)
+    add_child(legend_container)
+
+    legend_container.add_child(create_legend_item(COLOR_FAIRWAY, "Fairway"))
+    legend_container.add_child(create_legend_item(COLOR_ROUGH, "Rough"))
+    legend_container.add_child(create_legend_item(COLOR_SAND, "Sand"))
+    legend_container.add_child(create_legend_item(COLOR_GREEN, "Green"))
+    legend_container.add_child(create_legend_item(COLOR_TREE, "Tree"))
+    legend_container.add_child(create_legend_item(COLOR_TEEBOX, "Tee Box"))
+    legend_container.add_child(create_legend_item(COLOR_HOLE, "Hole"))
+    legend_container.add_child(create_legend_item(COLOR_PLAYABLE, "Playable"))
+    legend_container.add_child(create_legend_item(COLOR_PLAYABLE.lerp(COLOR_VARIANCE, 0.5), "Power Shot"))
+    legend_container.add_child(create_legend_item(COLOR_VARIANCE, "Variance"))
+
+    var explanation = Label.new()
+    explanation.text = "\nWoods can't be hit over trees."
+    legend_container.add_child(explanation)
+
+func create_legend_item(color: Color, text: String) -> HBoxContainer:
+    var item = HBoxContainer.new()
+    var color_rect = ColorRect.new()
+    color_rect.color = color
+    color_rect.custom_minimum_size = Vector2(20, 20)
+    item.add_child(color_rect)
+
+    var label = Label.new()
+    label.text = " " + text
+    item.add_child(label)
+
+    return item
     # Clear existing grid buttons from the container
     for child in hex_grid_container.get_children():
         if child is Button:

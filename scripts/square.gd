@@ -1,6 +1,6 @@
 class_name Square extends RefCounted
 
-enum TerrainType { FAIRWAY, ROUGH, GREEN, SAND }
+enum TerrainType { FAIRWAY, ROUGH, GREEN, SAND, TREE, TEEBOX }
 
 var x: int
 var y: int
