@@ -14,9 +14,9 @@ const COLOR_VARIANCE = Color(1.0, 0.7, 0.4)
 const COLOR_TREE = Color(0.3, 0.4, 0.1)
 const COLOR_TEEBOX = Color(0.8, 0.2, 0.2)
 
-var player_clubs: Array
+var player_clubs: Array[Club] = []
 var player_character: Character = null # Character with D&D stats
-var hole_grid: Dictionary # Stores Square objects, keyed by Vector2(x, y)
+var hole_grid: Dictionary = {} # Stores Square objects, keyed by Vector2(x, y)
 var grid_width: int = 20
 var grid_height: int = 20
 
@@ -26,23 +26,28 @@ var current_ball_square: Square
 var selected_club: Club = null
 var selected_club_button: Button = null
 
-var ball_instance: Node2D # Reference to the instantiated Ball scene
+var ball_instance: Node2D = null # Reference to the instantiated Ball scene
 var square_buttons: Dictionary = {}
 var is_animating_transition: bool = false
 
 @onready var hex_grid_container = $HexGridContainer # Renamed to square_grid_container in scene
 @onready var club_hand_container = $ClubHandContainer
 @onready var flip_sound_player = AudioStreamPlayer.new()
+@onready var reward_sound_player = AudioStreamPlayer.new()
 
 func _ready():
     print("Game Screen Loaded!")
     if player_clubs:
         print("Player Clubs: ", player_clubs)
 
-    # Setup audio player for flip sounds
+    # Setup audio players
     add_child(flip_sound_player)
     flip_sound_player.volume_db = -5  # Louder since we're only playing once per batch
     _generate_click_sound()
+
+    add_child(reward_sound_player)
+    reward_sound_player.volume_db = 0
+    _generate_reward_sound()
 
     await _generate_hole()
     _display_clubs()
@@ -54,7 +59,7 @@ func _ready():
     _update_ball_position_display()
     _create_legend()
 
-func _generate_click_sound():
+func _generate_click_sound() -> void:
     # Generate a mechanical clack sound like a split-flap display
     var sample_rate = 44100.0
     var duration = 0.15 # Longer for more mechanical sound
@@ -91,10 +96,45 @@ func _generate_click_sound():
     audio_stream.data = data
     flip_sound_player.stream = audio_stream
 
-func set_player_clubs(clubs: Array):
+func _generate_reward_sound() -> void:
+    # Generate a cheerful reward sound (ascending arpeggio)
+    var sample_rate = 44100.0
+    var duration = 0.3
+    var frequencies = [523.25, 659.25, 783.99]  # C5, E5, G5 (C major chord)
+
+    var audio_stream = AudioStreamWAV.new()
+    audio_stream.mix_rate = int(sample_rate)
+    audio_stream.format = AudioStreamWAV.FORMAT_16_BITS
+    audio_stream.stereo = false
+
+    var sample_count = int(sample_rate * duration)
+    var data = PackedByteArray()
+
+    for i in range(sample_count):
+        var t = float(i) / sample_rate
+        var envelope = exp(-t * 5.0)  # Gentle decay
+
+        # Play notes in sequence (arpeggio)
+        var note_duration = duration / 3.0
+        var note_index = int(t / note_duration)
+        if note_index >= 3:
+            note_index = 2
+
+        var freq = frequencies[note_index]
+        var sample = sin(2.0 * PI * freq * t) * envelope * 0.3
+
+        # Convert to 16-bit integer
+        var sample_int = int(clamp(sample * 32767.0, -32768.0, 32767.0))
+        data.append(sample_int & 0xFF)
+        data.append((sample_int >> 8) & 0xFF)
+
+    audio_stream.data = data
+    reward_sound_player.stream = audio_stream
+
+func set_player_clubs(clubs: Array[Club]) -> void:
     player_clubs = clubs
 
-func set_character(character: Character):
+func set_character(character: Character) -> void:
     player_character = character
     print("Character loaded: %s" % character.get_summary())
 
@@ -118,7 +158,7 @@ func _calculate_terrain_penalty(terrain_type: Square.TerrainType, is_wood: bool)
 
     return base_penalty
 
-func _generate_hole():
+func _generate_hole() -> void:
     hole_grid = {}
     square_buttons = {}
 
@@ -201,7 +241,7 @@ func _generate_hole():
 
     _update_ball_position_display()
 
-func _update_ball_position_display():
+func _update_ball_position_display() -> void:
     if is_instance_valid(current_ball_square):
         var square_button = square_buttons[Vector2(current_ball_square.x, current_ball_square.y)]
         var button_global_position = square_button.get_global_position()
@@ -209,7 +249,7 @@ func _update_ball_position_display():
         if is_instance_valid(ball_instance):
             ball_instance.global_position = button_center_global
 
-func _display_clubs():
+func _display_clubs() -> void:
     # Clear existing club buttons from the container
     for child in club_hand_container.get_children():
         if child is Button:
@@ -232,7 +272,7 @@ func _display_clubs():
         club_hand_container.add_child(club_button)
         club_button.connect("pressed", Callable(self, "_on_club_button_pressed").bind(club, club_button))
 
-func _clear_highlights():
+func _clear_highlights() -> void:
     for y in range(grid_height):
         for x in range(grid_width):
             var square = hole_grid[Vector2(x, y)]
@@ -262,7 +302,7 @@ func _clear_highlights():
                         stylebox_normal.bg_color = COLOR_TEEBOX
     _update_ball_position_display() # Ensure ball and hole are correctly displayed
 
-func _highlight_squares(club: Club):
+func _highlight_squares(club: Club) -> void:
     _clear_highlights() # Start with a clean slate
 
     var modified_max_distance = club.max_distance
@@ -291,11 +331,11 @@ func _highlight_squares(club: Club):
                         var stylebox_normal = square_button.get_theme_stylebox("normal") as StyleBoxFlat
                         stylebox_normal.bg_color = COLOR_PLAYABLE.lerp(COLOR_VARIANCE, 0.5) # Power shot square
 
-func is_line_of_sight_blocked(start_square: Square, end_square: Square) -> bool:
-    var x0 = start_square.x
-    var y0 = start_square.y
-    var x1 = end_square.x
-    var y1 = end_square.y
+func is_line_of_sight_blocked(from_square: Square, to_square: Square) -> bool:
+    var x0 = from_square.x
+    var y0 = from_square.y
+    var x1 = to_square.x
+    var y1 = to_square.y
 
     var dx = abs(x1 - x0)
     var dy = -abs(y1 - y0)
@@ -320,7 +360,7 @@ func is_line_of_sight_blocked(start_square: Square, end_square: Square) -> bool:
             y0 += sy
     return false
 
-func _get_power_shot_accuracy_modifier():
+func _get_power_shot_accuracy_modifier() -> int:
     var accuracy_modifier = 0
     var is_wood = "Wood" in selected_club.name or "Driver" in selected_club.name
     match current_ball_square.terrain_type:
@@ -343,7 +383,7 @@ func _get_power_shot_accuracy_modifier():
         accuracy_modifier += abs(max_dev)
     return accuracy_modifier
 
-func _on_club_button_pressed(club: Club, button: Button):
+func _on_club_button_pressed(club: Club, button: Button) -> void:
     if is_animating_transition:
         return # Don't allow club selection during transition
 
@@ -373,7 +413,7 @@ func _get_distance(square1: Square, square2: Square) -> int:
     # Chebyshev distance for square grid (max of dx, dy)
     return max(abs(square1.x - square2.x), abs(square1.y - square2.y))
 
-func _on_square_mouse_entered(x: int, y: int):
+func _on_square_mouse_entered(x: int, y: int) -> void:
     if selected_club:
         _clear_highlights()
         _highlight_squares(selected_club)
@@ -414,15 +454,12 @@ func _on_square_mouse_entered(x: int, y: int):
                             var stylebox_normal = variance_button.get_theme_stylebox("normal") as StyleBoxFlat
                             stylebox_normal.bg_color = COLOR_VARIANCE
 
-func _on_square_mouse_exited(x: int, y: int):
-
+func _on_square_mouse_exited(_x: int, _y: int) -> void:
     if selected_club:
-
         _clear_highlights() # Clear all highlights
-
         _highlight_squares(selected_club) # Re-apply general playable area highlights
 
-func _on_square_pressed(x: int, y: int):
+func _on_square_pressed(x: int, y: int) -> void:
     if is_animating_transition:
         return # Don't allow shots during transition
 
@@ -470,6 +507,11 @@ func _on_square_pressed(x: int, y: int):
                 
                 if current_ball_square == hole_square:
                     print("Ball in hole! Generating new hole...")
+                    # Play reward sound
+                    if reward_sound_player.stream:
+                        reward_sound_player.play()
+                    # Wait for reward sound to finish
+                    await get_tree().create_timer(0.3).timeout
                     _generate_new_hole()
                     return
                 
@@ -491,7 +533,7 @@ func _get_accuracy_array(accuracy: int) -> Array:
         array.append(i)
     return array
 
-func _generate_new_club_set():
+func _generate_new_club_set() -> void:
     player_clubs.clear()
     # Woods
     player_clubs.append(Club.new("1-Wood", "⛳", 7, {7: _get_accuracy_array(3)}))
@@ -511,7 +553,7 @@ func _get_random_terrain_color() -> Color:
     var colors = [COLOR_FAIRWAY, COLOR_ROUGH, COLOR_SAND, COLOR_GREEN, COLOR_TREE]
     return colors[randi() % colors.size()]
 
-func _animate_square_flip(square_button: Button, final_color: Color, delay: float, play_sound: bool = true):
+func _animate_square_flip(square_button: Button, final_color: Color, delay: float, _play_sound: bool = true) -> void:
     # Wait for the staggered delay
     await get_tree().create_timer(delay).timeout
 
@@ -540,61 +582,71 @@ func _animate_square_flip(square_button: Button, final_color: Color, delay: floa
     final_tween.tween_property(square_button, "scale", Vector2(1.0, 1.0), 0.05)
     await final_tween.finished
 
-func _animate_all_squares_transition(new_grid: Dictionary):
+func _animate_all_squares_transition(new_grid: Dictionary) -> void:
     is_animating_transition = true
 
-    # Process 3 rows at a time for a cascading split-flap effect
-    var rows_per_batch = 3
-    var flip_time_per_batch = 0.4 # How long each batch of rows takes to flip
+    # Group squares by distance from hole (radial animation)
+    var squares_by_distance: Dictionary = {}
+    var max_distance = 0
 
-    for batch_start in range(0, grid_height, rows_per_batch):
-        # Play sound at the start of each batch
+    for pos in new_grid.keys():
+        var square = new_grid[pos]
+        var distance = _get_distance(square, hole_square)
+
+        if not squares_by_distance.has(distance):
+            squares_by_distance[distance] = []
+        squares_by_distance[distance].append(pos)
+        max_distance = max(max_distance, distance)
+
+    # Animate each ring outward from the hole
+    var flip_time_per_ring = 0.15  # Faster rings
+
+    for dist in range(max_distance + 1):
+        if not squares_by_distance.has(dist):
+            continue
+
+        # Play sound for each ring
         if flip_sound_player.stream:
             flip_sound_player.play()
 
-        var batch_end = min(batch_start + rows_per_batch, grid_height)
+        # Animate all squares at this distance
+        for pos in squares_by_distance[dist]:
+            var square = new_grid[pos]
+            var square_button = square_buttons[pos]
 
-        # Start all squares in this batch of rows
-        for y in range(batch_start, batch_end):
-            for x in range(grid_width):
-                var pos = Vector2(x, y)
-                var square = new_grid[pos]
-                var square_button = square_buttons[pos]
+            # Determine final color based on terrain type
+            var final_color: Color
+            if square.x == hole_square.x and square.y == hole_square.y:
+                final_color = COLOR_HOLE
+            else:
+                match square.terrain_type:
+                    Square.TerrainType.FAIRWAY:
+                        final_color = COLOR_FAIRWAY
+                    Square.TerrainType.ROUGH:
+                        final_color = COLOR_ROUGH
+                    Square.TerrainType.SAND:
+                        final_color = COLOR_SAND
+                    Square.TerrainType.GREEN:
+                        final_color = COLOR_GREEN
+                    Square.TerrainType.TREE:
+                        final_color = COLOR_TREE
+                    Square.TerrainType.TEEBOX:
+                        final_color = COLOR_TEEBOX
+                    _:
+                        final_color = COLOR_ROUGH
 
-                # Determine final color based on terrain type
-                var final_color: Color
-                if square.x == hole_square.x and square.y == hole_square.y:
-                    final_color = COLOR_HOLE
-                else:
-                    match square.terrain_type:
-                        Square.TerrainType.FAIRWAY:
-                            final_color = COLOR_FAIRWAY
-                        Square.TerrainType.ROUGH:
-                            final_color = COLOR_ROUGH
-                        Square.TerrainType.SAND:
-                            final_color = COLOR_SAND
-                        Square.TerrainType.GREEN:
-                            final_color = COLOR_GREEN
-                        Square.TerrainType.TREE:
-                            final_color = COLOR_TREE
-                        Square.TerrainType.TEEBOX:
-                            final_color = COLOR_TEEBOX
-                        _:
-                            final_color = COLOR_ROUGH
+            # No delay for radial effect
+            _animate_square_flip(square_button, final_color, 0.0, false)
 
-                # Small stagger within the row for visual variety
-                var delay = (x * 0.005) # Slight horizontal stagger
-                _animate_square_flip(square_button, final_color, delay, false)
-
-        # Wait for this batch to complete before starting the next
-        await get_tree().create_timer(flip_time_per_batch).timeout
+        # Wait for this ring to complete before starting the next
+        await get_tree().create_timer(flip_time_per_ring).timeout
 
     # Small buffer to ensure all animations complete
     await get_tree().create_timer(0.3).timeout
 
     is_animating_transition = false
 
-func _generate_new_hole():
+func _generate_new_hole() -> void:
     # Generate new grid data WITHOUT updating the display
     var new_grid = {}
 
@@ -678,7 +730,7 @@ func _generate_new_hole():
         selected_club = null
     _clear_highlights() # Clear any lingering highlights
 
-func _create_legend():
+func _create_legend() -> void:
     var legend_container = VBoxContainer.new()
     legend_container.name = "Legend"
     legend_container.position = Vector2(1100, 50)
@@ -711,31 +763,3 @@ func create_legend_item(color: Color, text: String) -> HBoxContainer:
     item.add_child(label)
 
     return item
-    # Clear existing grid buttons from the container
-    for child in hex_grid_container.get_children():
-        if child is Button:
-            child.queue_free()
-    
-    # Club buttons are cleared in _display_clubs()
-
-    # Generate a new hand of clubs (placeholder for actual game logic)
-    _generate_new_club_set()
-    
-    # Regenerate the hole
-    _generate_hole()
-
-    hex_grid_container.move_child(ball_instance, -1)
-    
-    # Re-display clubs
-    _display_clubs()
-
-    # Ensure ball is positioned correctly at the new start square
-    _update_ball_position_display()
-    
-    # Deselect any selected club
-    if selected_club:
-        var prev_button = club_hand_container.find_child("ClubButton" + str(player_clubs.find(selected_club)))
-        if prev_button:
-            prev_button.position.y += 20 # Slide down
-        selected_club = null
-    _clear_highlights() # Clear any lingering highlights

@@ -11,152 +11,134 @@ grow_horizontal = 2
 grow_vertical = 2
 script = ExtResource("1_char")
 
-[node name="MarginContainer" type="MarginContainer" parent="."]
+[node name="CenterContainer" type="CenterContainer" parent="."]
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
-theme_override_constants/margin_left = 50
-theme_override_constants/margin_top = 30
-theme_override_constants/margin_right = 50
-theme_override_constants/margin_bottom = 30
 
-[node name="VBoxContainer" type="VBoxContainer" parent="MarginContainer"]
+[node name="VBoxContainer" type="VBoxContainer" parent="CenterContainer"]
 layout_mode = 2
-theme_override_constants/separation = 15
+theme_override_constants/separation = 20
 
-[node name="TitleLabel" type="Label" parent="MarginContainer/VBoxContainer"]
+[node name="TitleLabel" type="Label" parent="CenterContainer/VBoxContainer"]
 layout_mode = 2
-text = "Create Your Golfer"
+text = "⛳ CREATE YOUR GOLFER ⛳"
 horizontal_alignment = 1
 
-[node name="NameSection" type="HBoxContainer" parent="MarginContainer/VBoxContainer"]
+[node name="GolferSprite" type="ColorRect" parent="CenterContainer/VBoxContainer"]
+custom_minimum_size = Vector2(100, 150)
+layout_mode = 2
+size_flags_horizontal = 4
+color = Color(0.4, 0.6, 0.3, 1)
+
+[node name="PixelLabel" type="Label" parent="CenterContainer/VBoxContainer/GolferSprite"]
+layout_mode = 1
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -20.0
+offset_top = -11.5
+offset_right = 20.0
+offset_bottom = 11.5
+grow_horizontal = 2
+grow_vertical = 2
+text = "🏌️"
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="StatsSection" type="VBoxContainer" parent="CenterContainer/VBoxContainer"]
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="PowerRow" type="HBoxContainer" parent="CenterContainer/VBoxContainer/StatsSection"]
 layout_mode = 2
 
-[node name="NameLabel" type="Label" parent="MarginContainer/VBoxContainer/NameSection"]
+[node name="PowerLabel" type="Label" parent="CenterContainer/VBoxContainer/StatsSection/PowerRow"]
+custom_minimum_size = Vector2(120, 0)
 layout_mode = 2
-text = "Name:"
-custom_minimum_size = Vector2(100, 0)
+text = "💪 Power:"
 
-[node name="NameInput" type="LineEdit" parent="MarginContainer/VBoxContainer/NameSection"]
-layout_mode = 2
-size_flags_horizontal = 3
-placeholder_text = "Enter your name"
-max_length = 20
-
-[node name="ClassSection" type="HBoxContainer" parent="MarginContainer/VBoxContainer"]
+[node name="PowerSlider" type="HSlider" parent="CenterContainer/VBoxContainer/StatsSection"]
+custom_minimum_size = Vector2(300, 0)
 layout_mode = 2
 
-[node name="ClassLabel" type="Label" parent="MarginContainer/VBoxContainer/ClassSection"]
+[node name="PowerValue" type="Label" parent="CenterContainer/VBoxContainer/StatsSection"]
+custom_minimum_size = Vector2(50, 0)
 layout_mode = 2
-text = "Class:"
-custom_minimum_size = Vector2(100, 0)
-
-[node name="ClassOption" type="OptionButton" parent="MarginContainer/VBoxContainer/ClassSection"]
-layout_mode = 2
-size_flags_horizontal = 3
-
-[node name="PointsRemaining" type="Label" parent="MarginContainer/VBoxContainer"]
-layout_mode = 2
-text = "Points Remaining: 27 / 27"
+text = "10"
 horizontal_alignment = 1
 
-[node name="AbilitiesGrid" type="GridContainer" parent="MarginContainer/VBoxContainer"]
-layout_mode = 2
-columns = 3
-
-[node name="StrLabel" type="Label" parent="MarginContainer/VBoxContainer/AbilitiesGrid"]
-layout_mode = 2
-text = "Strength (STR):"
-custom_minimum_size = Vector2(150, 0)
-
-[node name="StrSpinner" type="SpinBox" parent="MarginContainer/VBoxContainer/AbilitiesGrid"]
+[node name="AccuracyRow" type="HBoxContainer" parent="CenterContainer/VBoxContainer/StatsSection"]
 layout_mode = 2
 
-[node name="StrEffect" type="Label" parent="MarginContainer/VBoxContainer/AbilitiesGrid"]
+[node name="AccuracyLabel" type="Label" parent="CenterContainer/VBoxContainer/StatsSection/AccuracyRow"]
+custom_minimum_size = Vector2(120, 0)
 layout_mode = 2
-text = "+0 max distance"
-custom_minimum_size = Vector2(200, 0)
+text = "🎯 Accuracy:"
 
-[node name="DexLabel" type="Label" parent="MarginContainer/VBoxContainer/AbilitiesGrid"]
-layout_mode = 2
-text = "Dexterity (DEX):"
-
-[node name="DexSpinner" type="SpinBox" parent="MarginContainer/VBoxContainer/AbilitiesGrid"]
+[node name="AccuracySlider" type="HSlider" parent="CenterContainer/VBoxContainer/StatsSection"]
+custom_minimum_size = Vector2(300, 0)
 layout_mode = 2
 
-[node name="DexEffect" type="Label" parent="MarginContainer/VBoxContainer/AbilitiesGrid"]
+[node name="AccuracyValue" type="Label" parent="CenterContainer/VBoxContainer/StatsSection"]
+custom_minimum_size = Vector2(50, 0)
 layout_mode = 2
-text = "-0 deviation"
+text = "10"
+horizontal_alignment = 1
 
-[node name="ConLabel" type="Label" parent="MarginContainer/VBoxContainer/AbilitiesGrid"]
-layout_mode = 2
-text = "Constitution (CON):"
-
-[node name="ConSpinner" type="SpinBox" parent="MarginContainer/VBoxContainer/AbilitiesGrid"]
+[node name="StaminaRow" type="HBoxContainer" parent="CenterContainer/VBoxContainer/StatsSection"]
 layout_mode = 2
 
-[node name="ConEffect" type="Label" parent="MarginContainer/VBoxContainer/AbilitiesGrid"]
+[node name="StaminaLabel" type="Label" parent="CenterContainer/VBoxContainer/StatsSection/StaminaRow"]
+custom_minimum_size = Vector2(120, 0)
 layout_mode = 2
-text = "+0 hand size"
+text = "❤️ Stamina:"
 
-[node name="IntLabel" type="Label" parent="MarginContainer/VBoxContainer/AbilitiesGrid"]
-layout_mode = 2
-text = "Intelligence (INT):"
-
-[node name="IntSpinner" type="SpinBox" parent="MarginContainer/VBoxContainer/AbilitiesGrid"]
+[node name="StaminaSlider" type="HSlider" parent="CenterContainer/VBoxContainer/StatsSection"]
+custom_minimum_size = Vector2(300, 0)
 layout_mode = 2
 
-[node name="IntEffect" type="Label" parent="MarginContainer/VBoxContainer/AbilitiesGrid"]
+[node name="StaminaValue" type="Label" parent="CenterContainer/VBoxContainer/StatsSection"]
+custom_minimum_size = Vector2(50, 0)
 layout_mode = 2
-text = "Preview: No"
+text = "10"
+horizontal_alignment = 1
 
-[node name="WisLabel" type="Label" parent="MarginContainer/VBoxContainer/AbilitiesGrid"]
-layout_mode = 2
-text = "Wisdom (WIS):"
-
-[node name="WisSpinner" type="SpinBox" parent="MarginContainer/VBoxContainer/AbilitiesGrid"]
+[node name="LuckRow" type="HBoxContainer" parent="CenterContainer/VBoxContainer/StatsSection"]
 layout_mode = 2
 
-[node name="WisEffect" type="Label" parent="MarginContainer/VBoxContainer/AbilitiesGrid"]
+[node name="LuckLabel" type="Label" parent="CenterContainer/VBoxContainer/StatsSection/LuckRow"]
+custom_minimum_size = Vector2(120, 0)
 layout_mode = 2
-text = "-0 terrain penalty"
+text = "🍀 Luck:"
 
-[node name="ChaLabel" type="Label" parent="MarginContainer/VBoxContainer/AbilitiesGrid"]
-layout_mode = 2
-text = "Charisma (CHA):"
-
-[node name="ChaSpinner" type="SpinBox" parent="MarginContainer/VBoxContainer/AbilitiesGrid"]
+[node name="LuckSlider" type="HSlider" parent="CenterContainer/VBoxContainer/StatsSection"]
+custom_minimum_size = Vector2(300, 0)
 layout_mode = 2
 
-[node name="ChaEffect" type="Label" parent="MarginContainer/VBoxContainer/AbilitiesGrid"]
+[node name="LuckValue" type="Label" parent="CenterContainer/VBoxContainer/StatsSection"]
+custom_minimum_size = Vector2(50, 0)
 layout_mode = 2
-text = "+10% rare clubs"
+text = "10"
+horizontal_alignment = 1
 
-[node name="HSeparator" type="HSeparator" parent="MarginContainer/VBoxContainer"]
-layout_mode = 2
-
-[node name="InfoLabel" type="Label" parent="MarginContainer/VBoxContainer"]
-layout_mode = 2
-text = "Allocate ability points (8-15 each). Classes provide recommended stat arrays.
-STR increases club distance | DEX improves accuracy
-CON adds more clubs to hand | INT reveals shot previews (12+)
-WIS reduces terrain penalties | CHA increases rare club chances"
-autowrap_mode = 3
-
-[node name="ButtonSection" type="HBoxContainer" parent="MarginContainer/VBoxContainer"]
+[node name="ButtonSection" type="HBoxContainer" parent="CenterContainer/VBoxContainer"]
 layout_mode = 2
 alignment = 1
+theme_override_constants/separation = 20
 
-[node name="BackButton" type="Button" parent="MarginContainer/VBoxContainer/ButtonSection"]
+[node name="BackButton" type="Button" parent="CenterContainer/VBoxContainer/ButtonSection"]
 layout_mode = 2
-text = "Back to Menu"
+text = "Back"
 
-[node name="StartButton" type="Button" parent="MarginContainer/VBoxContainer/ButtonSection"]
+[node name="StartButton" type="Button" parent="CenterContainer/VBoxContainer/ButtonSection"]
 layout_mode = 2
-text = "Start Game"
+text = "Play Golf!"
 
-[connection signal="pressed" from="MarginContainer/VBoxContainer/ButtonSection/BackButton" to="." method="_on_back_button_pressed"]
-[connection signal="pressed" from="MarginContainer/VBoxContainer/ButtonSection/StartButton" to="." method="_on_start_button_pressed"]
+[connection signal="pressed" from="CenterContainer/VBoxContainer/ButtonSection/BackButton" to="." method="_on_back_button_pressed"]
+[connection signal="pressed" from="CenterContainer/VBoxContainer/ButtonSection/StartButton" to="." method="_on_start_button_pressed"]

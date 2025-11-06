@@ -66,14 +66,12 @@ static func get_point_cost(score: int) -> int:
 		15: return 9
 		_: return 0
 
-# Validate that point buy is legal
+# Validate that abilities are within range
 func is_valid_point_buy() -> bool:
-	var total_cost = 0
 	for score in [strength, dexterity, constitution, intelligence, wisdom, charisma]:
 		if score < MIN_ABILITY or score > MAX_ABILITY:
 			return false
-		total_cost += get_point_cost(score)
-	return total_cost == POINT_BUY_TOTAL
+	return true
 
 # Get character summary for display
 func get_summary() -> String:

@@ -33,28 +33,23 @@ project.godot                  # Godot project configuration
 
 ### Game Flow
 1. **Title Screen** (`title_screen.gd`): Main menu with Start and Quit options
-2. **Character Creation** (`character_creation.gd`): D&D-style character creator with point-buy system
-   - Choose from 4 classes: Warrior, Ranger, Mage, Rogue
-   - Allocate 27 points across 6 ability scores (8-15 range)
-   - See real-time gameplay effects for each stat
+2. **Character Creation** (`character_creation.gd`): Simple character creator with 4 sliders
+   - Adjust Power (STR), Accuracy (DEX), Stamina (CON), and Luck (CHA)
+   - Each stat ranges from 8-15
+   - Pixel art golfer displayed
 3. **Game Screen** (`game_screen.gd`): Main gameplay with procedurally-generated holes
 4. **Hole Completion**: Triggers split-flap display transition to next hole with new club deck
 
-### D&D Character System
-Characters have six ability scores following D&D 5e conventions:
-- **Strength (STR)**: Increases max distance of all clubs (+1 distance per +2 modifier)
-- **Dexterity (DEX)**: Reduces accuracy deviation (directly reduces deviation by modifier amount)
-- **Constitution (CON)**: Increases starting hand size (+1 club per +3 modifier)
-- **Intelligence (INT)**: Reveals exact shot outcomes (requires INT 12+ to preview)
-- **Wisdom (WIS)**: Reduces terrain penalties (-1 penalty per +2 modifier)
-- **Charisma (CHA)**: Improves rare club chances (+5% per modifier, rare clubs have perfect accuracy)
+### Character Stats System
+Characters have four primary stats (simplified D&D):
+- **Power (STR)**: Increases max distance of all clubs (+1 distance per +2 modifier)
+- **Accuracy (DEX)**: Reduces accuracy deviation (directly reduces deviation by modifier amount)
+- **Stamina (CON)**: Increases starting hand size (+1 club per +3 modifier)
+- **Luck (CHA)**: Improves rare club chances (+5% per modifier, rare clubs have perfect accuracy)
 
-**Point-Buy System**: Players have 27 points to distribute across abilities (8-15 range)
-**Class Presets**: Each class provides a recommended stat array optimized for different playstyles:
-- Warrior: High STR/CON (long distance, durable)
-- Ranger: Balanced DEX/WIS (accurate, terrain-aware)
-- Mage: High INT/WIS (strategic, previews shots)
-- Rogue: High DEX/CHA (very accurate, lucky)
+Background stats (WIS/INT) are automatically set to 10:
+- **Wisdom (WIS)**: Reduces terrain penalties (-1 penalty per +2 modifier)
+- **Intelligence (INT)**: Reveals exact shot outcomes (requires INT 12+ to preview)
 
 ### Grid System (Square-Based)
 - **20x20 grid** of squares with Chebyshev distance (max of dx, dy)
