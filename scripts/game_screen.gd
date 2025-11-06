@@ -2,6 +2,7 @@ extends Control
 
 const Square = preload("res://scripts/square.gd")
 const BallScene = preload("res://ball.tscn")
+const Character = preload("res://scripts/character.gd")
 
 const COLOR_FAIRWAY = Color(0.5, 0.9, 0.5)
 const COLOR_ROUGH = Color(0.1, 0.4, 0.1)
@@ -14,6 +15,7 @@ const COLOR_TREE = Color(0.3, 0.4, 0.1)
 const COLOR_TEEBOX = Color(0.8, 0.2, 0.2)
 
 var player_clubs: Array
+var player_character: Character = null # Character with D&D stats
 var hole_grid: Dictionary # Stores Square objects, keyed by Vector2(x, y)
 var grid_width: int = 20
 var grid_height: int = 20
@@ -91,6 +93,30 @@ func _generate_click_sound():
 
 func set_player_clubs(clubs: Array):
     player_clubs = clubs
+
+func set_character(character: Character):
+    player_character = character
+    print("Character loaded: %s" % character.get_summary())
+
+func _calculate_terrain_penalty(terrain_type: Square.TerrainType, is_wood: bool) -> int:
+    var base_penalty = 0
+
+    match terrain_type:
+        Square.TerrainType.ROUGH:
+            base_penalty = 1
+            if is_wood:
+                base_penalty += 1
+        Square.TerrainType.SAND:
+            base_penalty = 1
+            if is_wood:
+                base_penalty += 2
+
+    # Apply Wisdom bonus to reduce terrain penalties
+    if player_character:
+        var wisdom_reduction = player_character.get_terrain_penalty_reduction()
+        base_penalty = max(0, base_penalty - wisdom_reduction)
+
+    return base_penalty
 
 func _generate_hole():
     hole_grid = {}
@@ -242,15 +268,9 @@ func _highlight_squares(club: Club):
     var modified_max_distance = club.max_distance
     var is_wood = "Wood" in club.name or "Driver" in club.name
 
-    match current_ball_square.terrain_type:
-        Square.TerrainType.ROUGH:
-            modified_max_distance -= 1
-            if is_wood:
-                modified_max_distance -= 1
-        Square.TerrainType.SAND:
-            modified_max_distance -= 1
-            if is_wood:
-                modified_max_distance -= 2
+    # Apply terrain penalty with Wisdom modifier
+    var terrain_penalty = _calculate_terrain_penalty(current_ball_square.terrain_type, is_wood)
+    modified_max_distance -= terrain_penalty
 
     for y_iter in range(grid_height):
         for x_iter in range(grid_width):
@@ -367,15 +387,9 @@ func _on_square_mouse_entered(x: int, y: int):
 
         var modified_max_distance = selected_club.max_distance
 
-        match current_ball_square.terrain_type:
-            Square.TerrainType.ROUGH:
-                modified_max_distance -= 1
-                if is_wood:
-                    modified_max_distance -= 1
-            Square.TerrainType.SAND:
-                modified_max_distance -= 1
-                if is_wood:
-                    modified_max_distance -= 2
+        # Apply terrain penalty with Wisdom modifier
+        var terrain_penalty = _calculate_terrain_penalty(current_ball_square.terrain_type, is_wood)
+        modified_max_distance -= terrain_penalty
 
         var distance_to_hovered = _get_distance(current_ball_square, hovered_square)
         var is_power_shot = distance_to_hovered == modified_max_distance + 1
@@ -422,15 +436,9 @@ func _on_square_pressed(x: int, y: int):
 
         var modified_max_distance = selected_club.max_distance
 
-        match current_ball_square.terrain_type:
-            Square.TerrainType.ROUGH:
-                modified_max_distance -= 1
-                if is_wood:
-                    modified_max_distance -= 1
-            Square.TerrainType.SAND:
-                modified_max_distance -= 1
-                if is_wood:
-                    modified_max_distance -= 2
+        # Apply terrain penalty with Wisdom modifier
+        var terrain_penalty = _calculate_terrain_penalty(current_ball_square.terrain_type, is_wood)
+        modified_max_distance -= terrain_penalty
 
         var distance_to_pressed = _get_distance(current_ball_square, pressed_square)
         var is_power_shot = distance_to_pressed == modified_max_distance + 1
