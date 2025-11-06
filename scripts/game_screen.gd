@@ -26,15 +26,23 @@ var selected_club_button: Button = null
 
 var ball_instance: Node2D # Reference to the instantiated Ball scene
 var square_buttons: Dictionary = {}
+var is_animating_transition: bool = false
 
 @onready var hex_grid_container = $HexGridContainer # Renamed to square_grid_container in scene
 @onready var club_hand_container = $ClubHandContainer
+@onready var flip_sound_player = AudioStreamPlayer.new()
 
 func _ready():
     print("Game Screen Loaded!")
     if player_clubs:
         print("Player Clubs: ", player_clubs)
-    _generate_hole()
+
+    # Setup audio player for flip sounds
+    add_child(flip_sound_player)
+    flip_sound_player.volume_db = -5  # Louder since we're only playing once per batch
+    _generate_click_sound()
+
+    await _generate_hole()
     _display_clubs()
 
     # Instantiate Ball scene
@@ -44,13 +52,51 @@ func _ready():
     _update_ball_position_display()
     _create_legend()
 
+func _generate_click_sound():
+    # Generate a mechanical clack sound like a split-flap display
+    var sample_rate = 44100.0
+    var duration = 0.15 # Longer for more mechanical sound
+    var frequency1 = 600.0 # Lower mechanical clack
+    var frequency2 = 1200.0 # Higher mechanical component
+
+    var audio_stream = AudioStreamWAV.new()
+    audio_stream.mix_rate = int(sample_rate)
+    audio_stream.format = AudioStreamWAV.FORMAT_16_BITS
+    audio_stream.stereo = false
+
+    var sample_count = int(sample_rate * duration)
+    var data = PackedByteArray()
+
+    for i in range(sample_count):
+        var t = float(i) / sample_rate
+        # Create a layered mechanical sound with very fast decay
+        var envelope = exp(-t * 40.0) # Fast decay
+
+        # Multiple frequency components for richer mechanical sound
+        var sample = sin(2.0 * PI * frequency1 * t) * envelope * 0.5
+        sample += sin(2.0 * PI * frequency2 * t) * envelope * 0.3
+
+        # Add filtered noise burst for the mechanical impact
+        var noise_envelope = exp(-t * 80.0) # Even faster decay for noise
+        sample += (randf() * 2.0 - 1.0) * 0.4 * noise_envelope
+
+        # Convert to 16-bit integer
+        var sample_int = int(clamp(sample * 32767.0, -32768.0, 32767.0))
+        # Pack as little-endian 16-bit
+        data.append(sample_int & 0xFF)
+        data.append((sample_int >> 8) & 0xFF)
+
+    audio_stream.data = data
+    flip_sound_player.stream = audio_stream
+
 func set_player_clubs(clubs: Array):
     player_clubs = clubs
 
 func _generate_hole():
     hole_grid = {}
     square_buttons = {}
-    # Initialize grid with rough and create buttons
+
+    # Create buttons first with a neutral starting color
     for y in range(grid_height):
         for x in range(grid_width):
             var square = Square.new(x, y, Square.TerrainType.ROUGH)
@@ -59,6 +105,7 @@ func _generate_hole():
             var square_button = Button.new()
             square_buttons[Vector2(x,y)] = square_button
             var stylebox = StyleBoxFlat.new()
+            stylebox.bg_color = COLOR_ROUGH # Start with rough color for initial flip
             stylebox.set_border_width_all(1)
             stylebox.set_border_color(Color(0.1, 0.1, 0.1, 0.2)) # Light border for grid effect
             square_button.add_theme_stylebox_override("normal", stylebox)
@@ -123,30 +170,8 @@ func _generate_hole():
     hole_square = hole_grid[Vector2(hole_x, hole_y)] # Random position on the green
     current_ball_square = start_square
 
-    # Update button colors based on terrain
-    for y in range(grid_height):
-        for x in range(grid_width):
-            var square = hole_grid[Vector2(x, y)]
-            var square_button = square_buttons[Vector2(x,y)]
-            var stylebox_normal = square_button.get_theme_stylebox("normal") as StyleBoxFlat
-            match square.terrain_type:
-                Square.TerrainType.FAIRWAY:
-                    stylebox_normal.bg_color = COLOR_FAIRWAY
-                Square.TerrainType.ROUGH:
-                    stylebox_normal.bg_color = COLOR_ROUGH
-                Square.TerrainType.SAND:
-                    stylebox_normal.bg_color = COLOR_SAND
-                Square.TerrainType.GREEN:
-                    stylebox_normal.bg_color = COLOR_GREEN
-                Square.TerrainType.TREE:
-                    stylebox_normal.bg_color = COLOR_TREE
-                Square.TerrainType.TEEBOX:
-                    stylebox_normal.bg_color = COLOR_TEEBOX
-
-    # Mark hole position with a different color
-    var hole_button = square_buttons[Vector2(hole_square.x, hole_square.y)]
-    var hole_stylebox = hole_button.get_theme_stylebox("normal") as StyleBoxFlat
-    hole_stylebox.bg_color = COLOR_HOLE
+    # NOW animate the transition with the split-flap effect
+    await _animate_all_squares_transition(hole_grid)
 
     _update_ball_position_display()
 
@@ -187,9 +212,15 @@ func _clear_highlights():
             var square = hole_grid[Vector2(x, y)]
             var square_button = square_buttons[Vector2(x,y)]
             var stylebox_normal = square_button.get_theme_stylebox("normal") as StyleBoxFlat
-            # Only revert if it's not the ball or the hole
-            if not (square.x == current_ball_square.x and square.y == current_ball_square.y) and \
-               not (square.x == hole_square.x and square.y == hole_square.y):
+
+            # Explicitly restore hole color
+            if square.x == hole_square.x and square.y == hole_square.y:
+                stylebox_normal.bg_color = COLOR_HOLE
+            # Skip the ball position
+            elif square.x == current_ball_square.x and square.y == current_ball_square.y:
+                pass # Ball position is handled by ball sprite
+            # Restore terrain colors for all other squares
+            else:
                 match square.terrain_type:
                     Square.TerrainType.FAIRWAY:
                         stylebox_normal.bg_color = COLOR_FAIRWAY
@@ -199,6 +230,10 @@ func _clear_highlights():
                         stylebox_normal.bg_color = COLOR_SAND
                     Square.TerrainType.GREEN:
                         stylebox_normal.bg_color = COLOR_GREEN
+                    Square.TerrainType.TREE:
+                        stylebox_normal.bg_color = COLOR_TREE
+                    Square.TerrainType.TEEBOX:
+                        stylebox_normal.bg_color = COLOR_TEEBOX
     _update_ball_position_display() # Ensure ball and hole are correctly displayed
 
 func _highlight_squares(club: Club):
@@ -289,6 +324,9 @@ func _get_power_shot_accuracy_modifier():
     return accuracy_modifier
 
 func _on_club_button_pressed(club: Club, button: Button):
+    if is_animating_transition:
+        return # Don't allow club selection during transition
+
     if selected_club == club:
         # Deselect club
         selected_club = null
@@ -299,7 +337,7 @@ func _on_club_button_pressed(club: Club, button: Button):
         # Deselect previously selected club if any
         if selected_club_button:
             selected_club_button.position.y += 20 # Slide down
-        
+
         # Select new club
         selected_club = club
         selected_club_button = button
@@ -371,6 +409,9 @@ func _on_square_mouse_exited(x: int, y: int):
         _highlight_squares(selected_club) # Re-apply general playable area highlights
 
 func _on_square_pressed(x: int, y: int):
+    if is_animating_transition:
+        return # Don't allow shots during transition
+
     if selected_club:
         var pressed_square = _get_square_at_grid_coords(x, y)
         if not pressed_square: return
@@ -457,28 +498,170 @@ func _generate_new_club_set():
     # Putter
     player_clubs.append(Club.new("Putter", "⛳", 1, {1: _get_accuracy_array(1)}))
 
+func _get_random_terrain_color() -> Color:
+    # Removed COLOR_TEEBOX (red) as it's too bright for the flip effect
+    var colors = [COLOR_FAIRWAY, COLOR_ROUGH, COLOR_SAND, COLOR_GREEN, COLOR_TREE]
+    return colors[randi() % colors.size()]
+
+func _animate_square_flip(square_button: Button, final_color: Color, delay: float, play_sound: bool = true):
+    # Wait for the staggered delay
+    await get_tree().create_timer(delay).timeout
+
+    var stylebox = square_button.get_theme_stylebox("normal") as StyleBoxFlat
+    var flip_count = randi() % 10 + 15 # Random number of flips between 15-25
+    var flip_duration = 0.05 # Time between flips
+
+    # Flip through random colors
+    for i in range(flip_count):
+        stylebox.bg_color = _get_random_terrain_color()
+
+        # Slight scale animation for flip effect
+        var tween = create_tween()
+        tween.tween_property(square_button, "scale", Vector2(0.9, 1.1), flip_duration / 2)
+        tween.tween_property(square_button, "scale", Vector2(1.0, 1.0), flip_duration / 2)
+
+        # Slow down the flips as we approach the final color
+        var slowdown_factor = 1.0 + (float(i) / float(flip_count)) * 2.0
+        await get_tree().create_timer(flip_duration * slowdown_factor).timeout
+
+    # Final flip to the actual color
+    stylebox.bg_color = final_color
+
+    var final_tween = create_tween()
+    final_tween.tween_property(square_button, "scale", Vector2(0.9, 1.1), 0.05)
+    final_tween.tween_property(square_button, "scale", Vector2(1.0, 1.0), 0.05)
+    await final_tween.finished
+
+func _animate_all_squares_transition(new_grid: Dictionary):
+    is_animating_transition = true
+
+    # Process 3 rows at a time for a cascading split-flap effect
+    var rows_per_batch = 3
+    var flip_time_per_batch = 0.4 # How long each batch of rows takes to flip
+
+    for batch_start in range(0, grid_height, rows_per_batch):
+        # Play sound at the start of each batch
+        if flip_sound_player.stream:
+            flip_sound_player.play()
+
+        var batch_end = min(batch_start + rows_per_batch, grid_height)
+
+        # Start all squares in this batch of rows
+        for y in range(batch_start, batch_end):
+            for x in range(grid_width):
+                var pos = Vector2(x, y)
+                var square = new_grid[pos]
+                var square_button = square_buttons[pos]
+
+                # Determine final color based on terrain type
+                var final_color: Color
+                if square.x == hole_square.x and square.y == hole_square.y:
+                    final_color = COLOR_HOLE
+                else:
+                    match square.terrain_type:
+                        Square.TerrainType.FAIRWAY:
+                            final_color = COLOR_FAIRWAY
+                        Square.TerrainType.ROUGH:
+                            final_color = COLOR_ROUGH
+                        Square.TerrainType.SAND:
+                            final_color = COLOR_SAND
+                        Square.TerrainType.GREEN:
+                            final_color = COLOR_GREEN
+                        Square.TerrainType.TREE:
+                            final_color = COLOR_TREE
+                        Square.TerrainType.TEEBOX:
+                            final_color = COLOR_TEEBOX
+                        _:
+                            final_color = COLOR_ROUGH
+
+                # Small stagger within the row for visual variety
+                var delay = (x * 0.005) # Slight horizontal stagger
+                _animate_square_flip(square_button, final_color, delay, false)
+
+        # Wait for this batch to complete before starting the next
+        await get_tree().create_timer(flip_time_per_batch).timeout
+
+    # Small buffer to ensure all animations complete
+    await get_tree().create_timer(0.3).timeout
+
+    is_animating_transition = false
+
 func _generate_new_hole():
-    # Clear existing grid buttons from the container
-    for child in hex_grid_container.get_children():
-        if child is Button:
-            child.queue_free()
-    
-    # Club buttons are cleared in _display_clubs()
+    # Generate new grid data WITHOUT updating the display
+    var new_grid = {}
 
-    # Generate a new hand of clubs (placeholder for actual game logic)
+    # Initialize grid with rough
+    for y in range(grid_height):
+        for x in range(grid_width):
+            var square = Square.new(x, y, Square.TerrainType.ROUGH)
+            new_grid[Vector2(x, y)] = square
+
+    # Define Tee Box
+    var tee_box_center_x = randi() % (grid_width - 4) + 2
+    new_grid[Vector2(tee_box_center_x, grid_height - 1)].terrain_type = Square.TerrainType.TEEBOX
+
+    # Random Green position
+    var green_center_x = randi() % (grid_width - 8) + 4
+    var green_center_y = randi() % (grid_height / 2)
+    var green_width = randi() % 3 + 3
+    var green_height = randi() % 2 + 2
+
+    for y in range(green_center_y, green_center_y + green_height):
+        for x in range(green_center_x, green_center_x + green_width):
+            if new_grid.has(Vector2(x, y)):
+                new_grid[Vector2(x, y)].terrain_type = Square.TerrainType.GREEN
+
+    # Random Fairway Path Generation (from tee box to green)
+    var current_fairway_x = tee_box_center_x
+    var current_fairway_y = grid_height - 3
+    while current_fairway_y > green_center_y + green_height:
+        var x_offset = randi() % 3 - 1
+        current_fairway_x = clamp(current_fairway_x + x_offset, 1, grid_width - 2)
+
+        for x_val in range(current_fairway_x - 1, current_fairway_x + 1):
+            if new_grid.has(Vector2(x_val, current_fairway_y)):
+                new_grid[Vector2(x_val, current_fairway_y)].terrain_type = Square.TerrainType.FAIRWAY
+        current_fairway_y -= 1
+
+    # Bunkers near green
+    for y in range(green_center_y - 2, green_center_y + green_height + 2):
+        for x in range(green_center_x - 2, green_center_x + green_width + 2):
+            if new_grid.has(Vector2(x, y)):
+                var square = new_grid[Vector2(x, y)]
+                if square.terrain_type == Square.TerrainType.ROUGH and randf() < 0.4:
+                    square.terrain_type = Square.TerrainType.SAND
+
+    # Trees
+    for y in range(grid_height):
+        for x in range(grid_width):
+            var square = new_grid[Vector2(x, y)]
+            if square.terrain_type == Square.TerrainType.ROUGH and randf() < 0.1:
+                square.terrain_type = Square.TerrainType.TREE
+            elif square.terrain_type == Square.TerrainType.FAIRWAY and randf() < 0.05:
+                square.terrain_type = Square.TerrainType.TREE
+
+    # Set start and hole positions
+    start_square = new_grid[Vector2(tee_box_center_x, grid_height - 1)]
+    var hole_x = green_center_x + randi() % green_width
+    var hole_y = green_center_y + randi() % green_height
+    hole_square = new_grid[Vector2(hole_x, hole_y)]
+
+    # NOW animate the transition with the split-flap effect
+    await _animate_all_squares_transition(new_grid)
+
+    # After animation, update the actual hole_grid
+    hole_grid = new_grid
+    current_ball_square = start_square
+
+    # Generate a new hand of clubs
     _generate_new_club_set()
-    
-    # Regenerate the hole
-    _generate_hole()
 
-    hex_grid_container.move_child(ball_instance, -1)
-    
     # Re-display clubs
     _display_clubs()
 
     # Ensure ball is positioned correctly at the new start square
     _update_ball_position_display()
-    
+
     # Deselect any selected club
     if selected_club:
         var prev_button = club_hand_container.find_child("ClubButton" + str(player_clubs.find(selected_club)))
